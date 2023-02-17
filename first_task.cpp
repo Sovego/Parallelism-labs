@@ -1,26 +1,27 @@
 #include <iostream>
 #include <math.h>
+#define n 10000000
 int main()
 {
     double sum = 0;
     double *array;
-    array = new double [100];
+    array = new double [n];
+    double pi = acos(-1);
+    #pragma acc enter data create(array[0:n],sum) copyin(pi)
 
-    #pragma acc enter data create(array[0:100],sum)
-
-    #pragma acc parallel loop present(array[0:100])
-    for (int i = 0; i < 100; ++i)
+    #pragma acc parallel loop present(array[0:n],pi)
+    for (int i = 0; i < n; ++i)
     {
-        array[i] = sin(35*3.14/180);
+        array[i] = sin(2*pi/i*n);
     }
 
-    #pragma acc parallel loop present(array[0:100],sum) reduction(+:sum)
-    for (int i = 0; i < 100; ++i)
+    #pragma acc parallel loop present(array[0:n],sum) reduction(+:sum)
+    for (int i = 0; i < n; ++i)
     {
         sum += array[i];
     }
 
-    #pragma acc exit data delete(array[0:100]) copyout(sum)
+    #pragma acc exit data delete(array[0:n]) copyout(sum)
 
     std::cout << sum << std::endl;
 
