@@ -109,18 +109,11 @@ int main(int argc, char* argv[])
                     }
             }
             // Value calculation loop End
-            #pragma acc parallel loop collapse(2) present(A[0:n][0:m],Anew[0:n][0:m],n,m) independent
-            for( int j = 1; j < n-1; j++)
-            {
-                for( int i = 1; i < m-1; i++ )
-                {
-                    A[j][i] = Anew[j][i];
-                }
-            }
+        
             // Array swap Begin
-            //double** buf = A;
-            //A = Anew;
-            //Anew = buf;
+            double** buf = A;
+            A = Anew;
+            Anew = buf;
             // Array swap End
 
             iter++; // Increase iterator
