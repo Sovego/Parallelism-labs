@@ -95,11 +95,11 @@ int main(int argc, char* argv[])
         while ( error > tol && iter < iter_max )
         {
             error = 0.0; // Error reset
-      //      #pragma acc update device(error) // Update variable on GPU
+            #pragma acc update device(error) // Update variable on GPU
 
             // Value calculation loop Begin
-            #pragma acc kernels
-       //     #pragma acc parallel loop collapse(2) present(A[0:n][0:m],Anew[0:n][0:m],n,m,error) independent reduction(max:error)
+            //#pragma acc kernels
+            #pragma acc parallel loop collapse(2) present(A[0:n][0:m],Anew[0:n][0:m],n,m,error) independent reduction(max:error)
             for( int i{1}; i < n-1; ++i)
             {
                 for( int j{1}; j < m-1; ++j )
