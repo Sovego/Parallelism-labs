@@ -5,6 +5,9 @@
 #include <ctype.h>
 #include <string>
 #include <chrono>
+#include <cstdint>
+#include <cstring>
+#define at(arr, x, y) (arr[(x)*n+(y)]) 
 /// @brief This function checks that the value obtained is a number
 /// @param s string with the value to be checked
 /// @return bool value: 1 if it`s number 0 if it`s anything else
@@ -43,75 +46,64 @@ int main(int argc, char* argv[])
     int n {std::stoi(argv[4])},m {std::stoi(argv[4])}; // n m - grid size
     double error {1},tol {std::stod(argv[2])}; // error - error value. tol - accuracy
     int iter {0},iter_max {std::stoi(argv[6])}; // iter - iterator. iter_max - max iteration count
-    double** A {new double*[n]}; // A - initial grid
-    double** Anew {new double*[n]}; // Anew - calculated grid
-    for (int i{0};i<n;++i)
-    {
-        A[i] = new double[m];
-    }
-    
-    for (int i{0};i<n;++i)
-    {
-        Anew[i] = new double[m];
-    }
+    double* A {new double[n*n]}; // A - initial grid
+    double* Anew {new double[n*n]}; // Anew - calculated grid
     // Init variables End
 
     // Init information output
     std::cout << "-----------------------------" << std::endl;
     std::cout << "- Accuracy: " << tol << std::endl << "- Max iteration count: "<< iter_max << std::endl << "- Grid size: " << n << std::endl;
     std::cout << "-----------------------------" << std::endl;
-    #pragma acc enter data create(A[0:n][0:m],Anew[0:n][0:m],iter) copyin(n,m,error)
+    
 
     // Filling corners Begin
-    A[0][0]=10;
-    A[n-1][0]=20;
-    A[0][m-1]=20;
-    A[n-1][m-1]=30;
-    Anew[0][0]=10;
-    Anew[n-1][0]=20;
-    Anew[0][m-1]=20;
-    Anew[n-1][m-1]=30;
+    at(A, 0, 0) = 10;
+    at(A, 0, m-1) = 20;
+    at(A, n-1, 0) = 20;
+    at(A, n-1, m-1) = 30;
     // Filling corners End
-
-    #pragma acc parallel loop present(A[0:n][0:m]) independent
-
     // Grid edge filling Begin
-        for (int i{1};i<n-1;++i)
-        {
-            A[0][i]=10+((A[0][m-1] - A[0][0])/ (n-1))*i;
-            A[i][0]=10+((A[n-1][0] - A[0][0])/ (n-1))*i;
-            A[n-1][i]=10+((A[n-1][0] - A[n-1][m-1])/ (n-1))*i;
-            A[i][m-1]=10+((A[n-1][m-1] - A[n-1][0])/ (n-1))*i;
-            Anew[0][i]=10+((Anew[0][m-1] - Anew[0][0])/ (n-1))*i;
-            Anew[i][0]=10+((Anew[n-1][0] - Anew[0][0])/ (n-1))*i;
-            Anew[n-1][i]=10+((Anew[n-1][0] - Anew[n-1][m-1])/ (n-1))*i;
-            Anew[i][m-1]=10+((Anew[n-1][m-1] - Anew[n-1][0])/ (n-1))*i;
-        }
+    for (int i{1};i<n-1;++i)
+    {
+        at(A,0,i) = (at(A,0,m-1)-at(A,0,0))/(m-1)*i+at(A,0,0);
+        at(A,i,0) = (at(A,n-1,0)-at(A,0,0))/(n-1)*i+at(A,0,0);
+        at(A,n-1,i) = (at(A,n-1,m-1)-at(A,n-1,0))/(m-1)*i+at(A,n-1,0);
+        at(A,i,m-1) = (at(A,n-1,m-1)-at(A,0,m-1))/(m-1)*i+at(A,0,m-1);
+        at(Anew,0,i) = (at(A,0,m-1)-at(A,0,0))/(m-1)*i+at(A,0,0);
+        at(Anew,i,0) = (at(A,n-1,0)-at(A,0,0))/(n-1)*i+at(A,0,0);
+        at(Anew,n-1,i) = (at(A,n-1,m-1)-at(A,n-1,0))/(m-1)*i+at(A,n-1,0);
+        at(Anew,i,m-1) = (at(A,n-1,m-1)-at(A,0,m-1))/(m-1)*i+at(A,0,m-1);
+    }
+    //std::memcpy(Anew, A, sizeof(double)*(n)*(m));
     // Grid edge filling End
-
-    //#pragma acc data present(A,Anew)
+    acc_set_device_num(3,acc_device_default);
+    #pragma acc enter data create(iter) copyin(A[0:n*n],Anew[0:n*n],n,m,error)
+    #pragma acc data present(A,Anew)
     {
         // Main algorithm loop Begin
         while ( error > tol && iter < iter_max )
         {
-            error = 0.0; // Error reset
-            #pragma acc update device(error) // Update variable on GPU
+            #pragma acc parallel present(error) 
+            {
+                error = 0.0;
+            } // Error reset
+            //#pragma acc update device(error) // Update variable on GPU
 
             // Value calculation loop Begin
             //#pragma acc kernels
-            #pragma acc parallel loop collapse(2) present(A[0:n][0:m],Anew[0:n][0:m],n,m,error) independent reduction(max:error)
+            #pragma acc parallel loop collapse(2) present(Anew[:n*m], A[:n*m], error) reduction(max:error) 
             for( int i{1}; i < n-1; ++i)
             {
                 for( int j{1}; j < m-1; ++j )
                     {
-                        Anew[i][j] = 0.25 * ( A[i][j+1] + A[i][j-1]+ A[i-1][j] + A[i+1][j]); // Calculate new values
-                        error = fmax( error, fabs(A[i][j] - Anew[i][j])); // Find new error value
+                        at(Anew,i,j) = 0.25 * (at(A,i,j+1) + at(A,i,j-1)+ at(A,i-1,j) + at(A,i+1,j)); // Calculate new values
+                        error = fmax( error, fabs(at(Anew,i,j) - at(A,i,j))); // Find new error value
                     }
             }
             // Value calculation loop End
         
             // Array swap Begin
-            double** buf = A;
+            double* buf = A;
             A = Anew;
             Anew = buf;
             // Array swap End
@@ -122,7 +114,7 @@ int main(int argc, char* argv[])
     }
     // Main algorithm loop End
 
-    #pragma acc exit data delete(A[0:n][0:m],Anew[0:n][0:m],n,m) copyout(error)
+    #pragma acc exit data delete(A[0:n*n],Anew[0:n*n],n,m) copyout(error)
 
     // Output calculated information
     std::cout << "Iteration count: " << iter << " " << "Error value: "<< error << std::endl;
