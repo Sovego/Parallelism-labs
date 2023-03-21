@@ -77,7 +77,7 @@ int main(int argc, char* argv[])
     //std::memcpy(Anew, A, sizeof(double)*(n)*(m));
     // Grid edge filling End
     acc_set_device_num(3,acc_device_default);
-    #pragma acc enter data create(iter) copyin(A[0:n*n],Anew[0:n*n],n,m,error)
+    #pragma acc enter data copyin(A[0:n*n],Anew[0:n*n],error)
     #pragma acc data present(A,Anew)
     {
         // Main algorithm loop Begin
@@ -114,7 +114,7 @@ int main(int argc, char* argv[])
     }
     // Main algorithm loop End
 
-    #pragma acc exit data delete(A[0:n*n],Anew[0:n*n],n,m) copyout(error)
+    #pragma acc exit data delete(A[0:n*n],Anew[0:n*n]) copyout(error)
 
     // Output calculated information
     std::cout << "Iteration count: " << iter << " " << "Error value: "<< error << std::endl;
