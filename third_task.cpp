@@ -20,11 +20,11 @@ void commandHelp()
 {
     std::cout << "-a <Accuracy> -s <Grid size> -m <Max iteration count>" << std::endl;
 }
+constexpr double negOne = -1;
 /// @brief Main function. For command line arguments help use -h
 /// @param argc argument count
 /// @param argv argument array
 /// @return exit code (default 0)
-constexpr double negOne = -1;
 int main(int argc, char* argv[])
 {
     // Arguments check Begin
@@ -83,6 +83,17 @@ int main(int argc, char* argv[])
         at(Anew,n-1,i) = (at(A,n-1,m-1)-at(A,n-1,0))/(m-1)*i+at(A,n-1,0);
         at(Anew,i,m-1) = (at(A,n-1,m-1)-at(A,0,m-1))/(m-1)*i+at(A,0,m-1);
     }
+    std::cout << "Init array\n";
+    std::cout << "-----------------------------" << std::endl;
+    for( int i{0}; i < n; ++i)
+        {
+            for( int j{0}; j < m; ++j )
+                {
+                    std::cout<<at(A,i,j) << " ";
+                }
+            std::cout<< std::endl;
+        }
+    std::cout << "-----------------------------" << std::endl;
     //std::memcpy(Anew, A, sizeof(double)*(n)*(m));
     // Grid edge filling End
     acc_set_device_num(3,acc_device_default);
@@ -142,16 +153,15 @@ int main(int argc, char* argv[])
     }
     // Main algorithm loop End
 
-    #pragma acc exit data delete(A[0:n*n],Anew[0:n*n],tmp[0:n*n])
+    #pragma acc exit data delete(Anew[0:n*n],tmp[0:n*n]) copyout(A[0:n*n])
 
     // Output calculated information
     std::cout << "Iteration count: " << iter << " " << "Error value: "<< error << std::endl;
     std::cout << "-----------------------------" << std::endl;
 
     // Delete pointers Begin
-    cublasDestroy(handle);
-    delete[] A;
-    A = nullptr;
+    
+    
     delete[] Anew;
     Anew = nullptr;
     // Delete pointers End
@@ -159,5 +169,19 @@ int main(int argc, char* argv[])
     auto end = std::chrono::steady_clock::now(); // Code end time
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin); // Calculate execution time
     std::cout << "The time: " << elapsed_ms.count() << " ms\n"; // Output execution time
+    std::cout << "-----------------------------" << std::endl;
+    std::cout << "Result array\n";
+    std::cout << "-----------------------------" << std::endl;
+    for( int i{1}; i < n-1; ++i)
+        {
+            for( int j{1}; j < m-1; ++j )
+                {
+                    std::cout<<at(A,i,j) << " ";
+                }
+            std::cout<< std::endl;
+        }
+    std::cout << "-----------------------------" << std::endl;
+    delete[] A;
+    A = nullptr;
     return 0;
 }
