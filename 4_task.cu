@@ -36,50 +36,51 @@ for (int i = 1; i < n - 1; i++) {
 cudaMemcpy(main_D, mainArr, size, cudaMemcpyHostToDevice);
 cudaMemcpy(sub_D, mainArr, size, cudaMemcpyHostToDevice);
 }
-
+// Шаг алгоритма
 __global__ void iterate(double* F, double* Fnew, double* subs, int* n_d){
 
-int j = blockIdx.x * blockDim.x + threadIdx.x;
+int j = blockIdx.x * blockDim.x + threadIdx.x; // вычисляем ячейку
 int i = blockIdx.y * blockDim.y + threadIdx.y;
 
 if(j == 0 || i == 0 || i == *n_d-1 || j == *n_d-1) return; // Dont update borders
-
+// сам алгоритм
 int n = *n_d;
 at(Fnew, i, j) = 0.25 * (at(F, i+1, j) + at(F, i-1, j) + at(F, i, j+1) + at(F, i, j-1));
 at(subs, i, j) = fabs(at(Fnew, i, j) - at(F, i, j));
 }
+// Блок редукции и магии
 __global__ void block_reduce(const double *in1, const double *in2, const int n, double *out){
-    typedef cub::BlockReduce<double, 256> BlockReduce;
+    typedef cub::BlockReduce<double, 256> BlockReduce; // создаем блок
     __shared__ typename BlockReduce::TempStorage temp_storage;
 
     double max_diff = 0;
-
+    // проходим по массивам и находим макс разницу
     for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < n; i += gridDim.x * blockDim.x)
     {
     double diff = abs(in1[i] - in2[i]);
     max_diff = fmax(diff, max_diff);
     }
-
+    // засовываем максимальную разницу в блок редукции
     double block_max_diff = BlockReduce(temp_storage).Reduce(max_diff, cub::Max());
 
     if (threadIdx.x == 0)
     {
-    out[blockIdx.x] = block_max_diff;
+    out[blockIdx.x] = block_max_diff; // обновляем значение
     }
 }
 
-
+// Главная функция решения
 __global__ void solve(double* F, double* Fnew, double* subs, int* n, double* error, int* itermax,int* iter,double* tol){
     *error = 1;
 
     size_t size = *n * *n;
 
-    dim3 threadPerBlock = dim3((*n + MAXIMUM_THREADS_PER_BLOCK - 1) / MAXIMUM_THREADS_PER_BLOCK, (*n + MAXIMUM_THREADS_PER_BLOCK - 1) / MAXIMUM_THREADS_PER_BLOCK);
+    dim3 threadPerBlock = dim3((*n + MAXIMUM_THREADS_PER_BLOCK - 1) / MAXIMUM_THREADS_PER_BLOCK, (*n + MAXIMUM_THREADS_PER_BLOCK - 1) / MAXIMUM_THREADS_PER_BLOCK); // определяем количество потоков на блок
     dim3 blocksPerGrid = dim3(((*n + (*n + MAXIMUM_THREADS_PER_BLOCK - 1) / MAXIMUM_THREADS_PER_BLOCK) - 1) / ((*n + MAXIMUM_THREADS_PER_BLOCK - 1) / MAXIMUM_THREADS_PER_BLOCK),
-            (*n + ((*n + MAXIMUM_THREADS_PER_BLOCK - 1) / MAXIMUM_THREADS_PER_BLOCK) - 1) / ((*n + MAXIMUM_THREADS_PER_BLOCK - 1) / MAXIMUM_THREADS_PER_BLOCK));
+            (*n + ((*n + MAXIMUM_THREADS_PER_BLOCK - 1) / MAXIMUM_THREADS_PER_BLOCK) - 1) / ((*n + MAXIMUM_THREADS_PER_BLOCK - 1) / MAXIMUM_THREADS_PER_BLOCK)); // определяяем количество блоков на сетку
 
-    int num_blocks_reduce = (size + THREADS_PER_BLOCK_REDUCE - 1) / THREADS_PER_BLOCK_REDUCE;
-
+    int num_blocks_reduce = (size + THREADS_PER_BLOCK_REDUCE - 1) / THREADS_PER_BLOCK_REDUCE; // количество блоков редукции
+    // выделяем память под ошибку блочной редукции
     double *error_reduction;
     cudaMalloc(&error_reduction, sizeof(double) * num_blocks_reduce);
 
@@ -90,11 +91,11 @@ __global__ void solve(double* F, double* Fnew, double* subs, int* n, double* err
 
     do {
         *error = 1;
-        iterate<<<blocksPerGrid, threadPerBlock>>>(F, Fnew, subs, n);
+        iterate<<<blocksPerGrid, threadPerBlock>>>(F, Fnew, subs, n); // проходим алгоритмом
 
-        block_reduce<<<num_blocks_reduce, THREADS_PER_BLOCK_REDUCE>>>(F, Fnew, size, error_reduction);
-        cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, error_reduction, error, num_blocks_reduce);
-
+        block_reduce<<<num_blocks_reduce, THREADS_PER_BLOCK_REDUCE>>>(F, Fnew, size, error_reduction); // по блочно проходим редукцией
+        cub::DeviceReduce::Max(d_temp_storage, temp_storage_bytes, error_reduction, error, num_blocks_reduce); // проходим редукцией по всем блокам 
+        // обновляем массив
         double* swap = F;
         F = Fnew;
         Fnew = swap;
@@ -147,6 +148,7 @@ int main(int argc, char *argv[]){
     initArrays(F_H, F_D, Fnew_D,n,m);
     nvtxRangePush("MainCycle");
     {
+        // объявляем переменные на видеокарте
         int* n_d;
         double* error_d;
         int* iterations_d;
@@ -160,11 +162,12 @@ int main(int argc, char *argv[]){
         cudaMemcpy(n_d, &n, sizeof(int), cudaMemcpyHostToDevice);
         cudaMemcpy(iter_max_d, &iter_max, sizeof(int), cudaMemcpyHostToDevice);
         cudaMemcpy(tol_d, &tol, sizeof(double), cudaMemcpyHostToDevice);
+        // запускаем решение
         solve<<<1, 1>>>(F_D, Fnew_D, substractions, n_d, error_d,iter_max_d, iterations_d,tol_d);
-
+        // копирууем данные на хост
         cudaMemcpy(&error, error_d, sizeof(double), cudaMemcpyDeviceToHost);
         cudaMemcpy(&iterationsElapsed, iterations_d, sizeof(int), cudaMemcpyDeviceToHost);
-        
+        // чистим память видеокарты
         cudaFree(error_d);
         cudaFree(n_d);
         cudaFree(iterations_d);
