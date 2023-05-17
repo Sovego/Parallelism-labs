@@ -11,31 +11,14 @@
 #include </opt/nvidia/hpc_sdk/Linux_x86_64/22.11/cuda/11.8/targets/x86_64-linux/include/nvtx3/nvToolsExt.h>
 #endif
 
-#ifdef DEBUG
-#define DEBUG_PRINTF(line, a...) printf(line, ## a)
-#else
-#define DEBUG_PRINTF(line, a...) 0
-#endif
-
-#ifdef DEBUG1
-#define DEBUG1_PRINTF(line, a...) printf(line, ## a)
-#else
-#define DEBUG1_PRINTF(line, a...) 0
-#endif
-
 #define at(arr, x, y) (arr[(x) * (n) + (y)])
 /*
 * Режимы распределения потоков по блокам
 */
-#ifdef THREAD_BIG_GRID
-constexpr int MAXIMUM_THREADS_PER_BLOCK = 1024;
-#define THREAD_PER_BLOCK_DEFINED(arr_lenght_dim_1, arr_lenght_dim_2, max_thread) (max_thread)
-#define BLOCK_COUNT_DEFINED(arr_lenght_dim_1, arr_lenght_dim_2, threads_count) (arr_lenght_dim_2/threads_count.x?arr_lenght_dim_2/threads_count.x:1), arr_lenght_dim_1
-#else
 constexpr int MAXIMUM_THREADS_PER_BLOCK = 32;
 #define THREAD_PER_BLOCK_DEFINED(arr_lenght_dim_1, arr_lenght_dim_2, max_thread) ((arr_lenght_dim_1+max_thread-1)/max_thread), ((arr_lenght_dim_2+max_thread-1)/max_thread)
 #define BLOCK_COUNT_DEFINED(arr_lenght_dim_1, arr_lenght_dim_2, threads_count) ((arr_lenght_dim_1 + threads_count.x - 1) / threads_count.x), ((arr_lenght_dim_2 + threads_count.y - 1) / threads_count.y)
-#endif
+
 
 
 // Cornerns
@@ -98,13 +81,10 @@ void transfer_data(const int rank, const int ranks_count, double* F_from, double
 
 __global__ void iterate(const double *F, double *Fnew,const int* m){
 
-#ifdef THREAD_BIG_GRID
-    size_t i = blockIdx.y * blockDim.y + threadIdx.y;
-    size_t j = blockIdx.x * blockDim.x + threadIdx.x;
-#else
+
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-#endif
+
 
     if (j == 0 || i == 0 || i >= *m - 1 || j >= *m - 1) return; // Don't update borders
 
@@ -227,7 +207,6 @@ int main(int argc, char *argv[]) {
         for(size_t target = 0; target < ranks_count; target++){
             MPI_Request req;
             data_lenght = ELEMENTS_BY_PROCESS - 2 * m_l * (target == (ranks_count - 1) && ranks_count != 1);
-            DEBUG_PRINTF("Sended to %d elems: %d from: %d\n", target, data_lenght, data_start);
             MPI_Isend(
                 F_H_full + data_start,
                 data_lenght,
@@ -322,7 +301,6 @@ int main(int argc, char *argv[]) {
     } 
     dim3 blocksPerGrid {BLOCK_COUNT_DEFINED(n_l, m_l, threadPerBlock)}; // ПЕРЕОСМЫСЛИТЬ
 
-    DEBUG_PRINTF("%d: %d %d %d %d\n", rank, threadPerBlock.x, threadPerBlock.y, blocksPerGrid.x, blocksPerGrid.y);
 
     MPI_Barrier(MPI_COMM_WORLD);
     
@@ -359,7 +337,6 @@ int main(int argc, char *argv[]) {
                     for(int err_id = 0; err_id < ranks_count; err_id++){
                         error = max(error, error_array[err_id]);
                     }
-                    DEBUG1_PRINTF("iters: %d error: %lf\n", iterationsElapsed, error);
                 }
                 MPI_Barrier(MPI_COMM_WORLD);
                 MPI_Bcast(&error, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
