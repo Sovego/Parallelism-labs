@@ -1,6 +1,6 @@
 #define IDX2C(i,j,ld) (((j)*(ld))+(i))
 
-#pragma once
+
 
 #include <iostream>
 #include <string>
@@ -27,7 +27,7 @@ enum class ARRAY_SOURCE{
 
 using calc_type = float;
 
-#pragma once
+
 
 template<typename data_type>
 class MDT_array{
