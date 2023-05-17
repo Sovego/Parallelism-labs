@@ -27,7 +27,7 @@
 /*
 * Режимы распределения потоков по блокам
 */
-#ifdef THREAD_ANALOG_MODE
+#ifdef THREAD_BIG_GRID
 constexpr int MAXIMUM_THREADS_PER_BLOCK = 1024;
 #define THREAD_PER_BLOCK_DEFINED(arr_lenght_dim_1, arr_lenght_dim_2, max_thread) (max_thread)
 #define BLOCK_COUNT_DEFINED(arr_lenght_dim_1, arr_lenght_dim_2, threads_count) (arr_lenght_dim_2/threads_count.x?arr_lenght_dim_2/threads_count.x:1), arr_lenght_dim_1
@@ -98,7 +98,7 @@ void transfer_data(const int rank, const int ranks_count, double* F_from, double
 
 __global__ void iterate(const double *F, double *Fnew,const int* m){
 
-#ifdef THREAD_ANALOG_MODE
+#ifdef THREAD_BIG_GRID
     size_t i = blockIdx.y * blockDim.y + threadIdx.y;
     size_t j = blockIdx.x * blockDim.x + threadIdx.x;
 #else
